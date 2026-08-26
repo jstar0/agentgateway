@@ -264,10 +264,34 @@ pub struct RequestVendorExtensions {
 	pub rest: serde_json::Value,
 }
 
+fn deserialize_output<'de, D>(deserializer: D) -> Result<Vec<OutputItem>, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let mut output = Vec::<Value>::deserialize(deserializer)?;
+	for item in &mut output {
+		let Some(content) = item.get_mut("content").and_then(Value::as_array_mut) else {
+			continue;
+		};
+		for part in content {
+			if part.get("type").and_then(Value::as_str) == Some("output_text")
+				&& let Some(part) = part.as_object_mut()
+			{
+				part
+					.entry("annotations")
+					.or_insert_with(|| Value::Array(Vec::new()));
+			}
+		}
+	}
+
+	serde_json::from_value(Value::Array(output)).map_err(serde::de::Error::custom)
+}
+
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
 	pub id: String,
 	pub status: String,
+	#[serde(deserialize_with = "deserialize_output")]
 	pub output: Vec<OutputItem>,
 	pub model: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -1014,6 +1038,39 @@ mod tests {
 			usage: None,
 			rest: serde_json::Value::Null,
 		}
+	}
+
+	#[test]
+	fn response_defaults_missing_output_text_annotations() {
+		let response: Response = serde_json::from_value(serde_json::json!({
+			"id": "resp_123",
+			"status": "completed",
+			"model": "gpt-5.6",
+			"output": [{
+				"type": "message",
+				"id": "msg_123",
+				"role": "assistant",
+				"status": "completed",
+				"content": [{
+					"type": "output_text",
+					"text": "Hello from an OpenAI-compatible upstream."
+				}]
+			}]
+		}))
+		.expect("missing annotations should default to an empty array");
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected an output message");
+		};
+		let Content::OutputText(text) = &message.content[0] else {
+			panic!("expected output text");
+		};
+		assert!(text.annotations.is_empty());
+		assert_eq!(text.logprobs, None);
+		assert_eq!(
+			serde_json::to_value(&response).unwrap()["output"][0]["content"][0]["annotations"],
+			serde_json::json!([])
+		);
 	}
 
 	#[test]
