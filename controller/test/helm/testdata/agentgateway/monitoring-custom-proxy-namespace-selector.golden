@@ -21,6 +21,8 @@ spec:
       - "agentgateway"
   namespaceSelector:
     any: true
+  podTargetLabels:
+  - gateway.networking.k8s.io/gateway-name
   podMetricsEndpoints:
   - port: metrics
     path: /metrics

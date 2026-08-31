@@ -23,6 +23,8 @@ spec:
   namespaceSelector:
     matchNames:
     - default
+  podTargetLabels:
+  - gateway.networking.k8s.io/gateway-name
   podMetricsEndpoints:
   - port: metrics
     path: /metrics

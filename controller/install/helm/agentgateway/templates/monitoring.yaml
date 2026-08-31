@@ -24,6 +24,8 @@ spec:
   namespaceSelector:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  podTargetLabels:
+  - gateway.networking.k8s.io/gateway-name
   podMetricsEndpoints:
   - port: metrics
     path: /metrics
